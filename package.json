@@ -1,0 +1,42 @@
+{
+  "name": "rmq-exchange",
+  "version": "0.1.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gregdaynes/rmq-exchange.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/gregdaynes/rmq-exchange/issues"
+  },
+  "homepage": "https://github.com/gregdaynes/rmq-exchange#readme",
+  "dependencies": {
+    "amqplib": "^0.5.1"
+  },
+  "devDependencies": {
+    "eslint": "^3.12.0",
+    "eslint-config-airbnb-base": "^11.0.0",
+    "eslint-plugin-import": "^2.2.0",
+    "jest": "^17.0.3"
+  },
+  "eslintConfig": {
+    "env": {
+        "node": true,
+        "es6": true
+    },
+    "extents": "airbnb-base",
+    "sourceType": "module"
+  },
+  "jest": {
+    "bail": true,
+    "verbose": true,
+    "collectCoverage": true
+  }
+}
