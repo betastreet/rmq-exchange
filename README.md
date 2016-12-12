@@ -1,3 +1,3 @@
 # rmq-exchange
 
-![](https://travis-ci.org/gregdaynes/rmq-exchange.svg?branch=develop)
+[![Build Status](https://travis-ci.org/gregdaynes/rmq-exchange.svg?branch=develop)](https://travis-ci.org/gregdaynes/rmq-exchange)
