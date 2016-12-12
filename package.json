@@ -16,5 +16,14 @@
   "bugs": {
     "url": "https://github.com/gregdaynes/rmq-exchange/issues"
   },
-  "homepage": "https://github.com/gregdaynes/rmq-exchange#readme"
+  "homepage": "https://github.com/gregdaynes/rmq-exchange#readme",
+  "dependencies": {
+    "amqplib": "^0.5.1"
+  },
+  "devDependencies": {
+    "eslint": "^3.12.0",
+    "eslint-config-airbnb-base": "^11.0.0",
+    "eslint-plugin-import": "^2.2.0",
+    "jest": "^17.0.3"
+  }
 }
