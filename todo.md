@@ -4,45 +4,31 @@ RabbitMQ Module
 - [ ] Test Driven Development
 - [ ] - Jest
 - [ ] - 100% coverage, including branches
-- [ ] Support both AMQP & AMQPS (ssl support)
-- [ ] MIT License
+- [x] Support both AMQP & AMQPS (ssl support)
+- [x] MIT License
 - [ ] Readme
-- [ ] Gitignore
+- [x] Gitignore
 - [ ] Docker testing
 - [ ] Documentation
-- [ ] Semver
+- [x] Semver
 - [ ] Upto date dependencies
 - [ ] Snyk Scanner
 - [ ] Badges?
-- [ ] AirBnB Eslint
+- [x] AirBnB Eslint
 - [ ] Continuous Integration
-- [ ] - Travis
+- [x] - Travis
 - [ ] - Run tests
 - [ ] - eslint stylechecking
+- [x] maintain feature parity with amqplib
 
-
-
-create exchange
-- maintain feature parity with amqplib
-- [ ] name of exchange
-- [ ] type of exchange
-- [ ] options
-
-create queues
-
-create bindings - exchange - queue
-
-post message to queue
-
-post message to exchange
-- [ ] 
-
-consume message from queue
-- [ ] Acknowledge message
-- [ ] Retry on failure
-- [ ] Repost message to queue
-
-
+- [x] Connection
+- [x] Queues
+- [x] - array of queues to create
+- [x] Exchange
+- [x] Bind Exchange
+- [x] Post message to queue
+- [x] Post message to exchange
+- [ ] Get message from queue
 
 
 ```
