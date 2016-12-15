@@ -66,7 +66,8 @@ function createChannel() {
     return connection()
         .then(() => config.connection.createChannel())
         .then(channel => {
-            channel.queue = sendToQueueOverride;
+            channel.publishTo = publishTo;
+            channel.queue = queue;
             return channel;
         })
         .catch(err => { throw err; });
@@ -83,7 +84,10 @@ function connection() {
 function createQueues() {
     return createChannel()
         .then(channel => Promise.all(config.queues.reduce((acc, q) => {
-            acc.concat([channel.assertQueue(q.name, q.options)]);
+            Object.keys(q.actions).map(action => {
+                acc.concat([channel.assertQueue(`${q.key}.${action}`, q.actions[action].options)]);
+            });
+
             return acc;
         }, [createChannel()])))
         .then(response => response[0].close())
@@ -93,7 +97,7 @@ function createQueues() {
 function createExchanges() {
     return createChannel()
         .then(channel => Promise.all(config.exchanges.reduce((acc, x) => {
-            acc.concat([channel.assertExchange(x.name, x.type, x.options)]);
+            acc.concat([channel.assertExchange(x.key, x.type, x.options)]);
             return acc;
         }, [createChannel()])))
         .then(response => response[0].close())
@@ -119,7 +123,10 @@ function createUpstreams() {
 function bindQueues() {
     return createChannel()
         .then(channel => Promise.all(config.queues.reduce((acc, q) => {
-            acc.concat([channel.bindQueue(q.name, q.binding.source, q.binding.routingKey)]);
+            Object.keys(q.actions).map(action => {
+                acc.concat([channel.bindQueue(`${q.key}.${action}`, q.actions[action].source, q.actions[action].routingKey)]);
+            });
+
             return acc;
         }, [createChannel()])))
         .then(response => response[0].close())
@@ -171,7 +178,19 @@ function createUpstream(upstream) {
     });
 }
 
-function sendToQueueOverride(queue, content, options) {
-    return this.sendToQueue(queue, Buffer.from(content), options);
+function publishTo(q, action, content, options) {
+    const queue = config.queues.filter(arr => {
+        return arr.name = q;
+    })[0].actions[action];
+
+    return this.publish(queue.source, queue.routingKey, Buffer.from(content), options);
+}
+
+function queue(q, action, content, options) {
+    const queue = config.queues.filter(arr => {
+        return arr.name = q;
+    })[0];
+
+    return this.sendToQueue(`${queue.key}.${action}`, Buffer.from(content), options);
 }
 
