@@ -27,7 +27,10 @@ function createRMQ(cfg) {
             createPolicies(),
             createUpstreams(),
         ]))
-        .then(() => bindQueues())
+        .then(() => Promise.all([
+            bindQueues(),
+            createConsumers(),
+        ]))
         .catch(err => { throw err; });
 
     rmq.channel = createChannel;
@@ -68,6 +71,7 @@ function createChannel() {
         .then(channel => {
             channel.publishTo = publishTo;
             channel.queue = queue;
+
             return channel;
         })
         .catch(err => { throw err; });
@@ -84,7 +88,7 @@ function connection() {
 function createQueues() {
     return createChannel()
         .then(channel => Promise.all(config.queues.reduce((acc, q) => {
-            Object.keys(q.actions).map(action => {
+            Object.keys(q.actions).forEach(action => {
                 acc.concat([channel.assertQueue(`${q.key}.${action}`, q.actions[action].options)]);
             });
 
@@ -120,11 +124,37 @@ function createUpstreams() {
         .catch(err => { throw err; });
 }
 
+function createConsumers() {
+    return createChannel()
+        .then(channel => {
+            config.queues.forEach(q => {
+                Object.keys(q.actions).forEach(action => {
+                    const queue = q.actions[action];
+
+                    if (findExchange(queue.source)) {
+                        channel.consume(`${q.key}.${action}`, (msg) => queue.consume(msg, channel));
+                    }
+                });
+            });
+        })
+        .catch(err => { throw err; });
+}
+
+function findExchange(name) {
+    return config.exchanges.find(obj => obj.name === name);
+}
+
 function bindQueues() {
     return createChannel()
         .then(channel => Promise.all(config.queues.reduce((acc, q) => {
-            Object.keys(q.actions).map(action => {
-                acc.concat([channel.bindQueue(`${q.key}.${action}`, q.actions[action].source, q.actions[action].routingKey)]);
+            Object.keys(q.actions).forEach(action => {
+                const queue = q.actions[action];
+
+                const exchange = findExchange(queue.source);
+
+                if (findExchange(queue.source) && !queue.noBind) {
+                    acc.concat([channel.bindQueue(`${q.key}.${action}`, exchange.key, queue.routingKey)]);
+                }
             });
 
             return acc;
@@ -193,4 +223,3 @@ function queue(q, action, content, options) {
 
     return this.sendToQueue(`${queue.key}.${action}`, Buffer.from(content), options);
 }
-
