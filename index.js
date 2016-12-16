@@ -153,7 +153,7 @@ function bindQueues() {
                 const exchange = findExchange(queue.source);
 
                 if (findExchange(queue.source) && !queue.noBind) {
-                    acc.concat([channel.bindQueue(`${q.key}.${action}`, exchange.key, queue.routingKey)]);
+                    acc.concat([channel.bindQueue(`${q.key}.${action}`, exchange.key, `${queue.pattern || queue.routingKey}`)]);
                 }
             });
 
