@@ -131,7 +131,7 @@ function createConsumers() {
                 Object.keys(q.actions).forEach(action => {
                     const queue = q.actions[action];
 
-                    if (findExchange(queue.source)) {
+                    if (queue.consume && findExchange(queue.source)) {
                         channel.consume(`${q.key}.${action}`, (msg) => queue.consume(msg, channel));
                     }
                 });
@@ -151,9 +151,13 @@ function bindQueues() {
                 const queue = q.actions[action];
 
                 const exchange = findExchange(queue.source);
+                const queueAction = `${q.key}.${action}`;
+                const routing = queue.pattern || queue.routingKey;
 
-                if (findExchange(queue.source) && !queue.noBind) {
-                    acc.concat([channel.bindQueue(`${q.key}.${action}`, exchange.key, `${queue.pattern || queue.routingKey}`)]);
+                if (exchange && !queue.noBind) {
+                    acc.concat([
+                        channel.bindQueue(queueAction, exchange.key, routing),
+                    ]);
                 }
             });
 
@@ -209,13 +213,21 @@ function createUpstream(upstream) {
 }
 
 function publishTo(q, action, content, options) {
-    const queue = config.queues.filter(arr => {
-        return arr.name = q;
-    })[0].actions[action];
+    return new Promise((resolve, reject) => {
+        const queue = config.queues.filter(arr => arr.name === q)[0].actions[action];
 
-    const exchange = findExchange(queue.source);
+        const exchange = findExchange(queue.source);
+        const buffer = contentToBuffer(content);
 
-    return this.publish(exchange.key, queue.routingKey, Buffer.from(content), options);
+        const results = this.publish(exchange.key, queue.routingKey, buffer, options);
+
+        // blocking loop
+        while (results === undefined) { console.info('broadcasting'); };
+
+        if (!results) return reject(results);
+
+        return resolve(results);
+    });
 }
 
 function queue(q, action, content, options) {
@@ -223,5 +235,11 @@ function queue(q, action, content, options) {
         return arr.name = q;
     })[0];
 
-    return this.sendToQueue(`${queue.key}.${action}`, Buffer.from(content), options);
+    return this.sendToQueue(`${queue.key}.${action}`, contentToBuffer(content), options);
+}
+
+function contentToBuffer(content) {
+    return (typeof content === 'object')
+        ? new Buffer(JSON.stringify(content))
+        : new Buffer(content);
 }
