@@ -213,7 +213,9 @@ function publishTo(q, action, content, options) {
         return arr.name = q;
     })[0].actions[action];
 
-    return this.publish(queue.key, queue.routingKey, Buffer.from(content), options);
+    const exchange = findExchange(queue.source);
+
+    return this.publish(exchange.key, queue.routingKey, Buffer.from(content), options);
 }
 
 function queue(q, action, content, options) {
