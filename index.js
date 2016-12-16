@@ -213,7 +213,7 @@ function publishTo(q, action, content, options) {
         return arr.name = q;
     })[0].actions[action];
 
-    return this.publish(queue.source, queue.routingKey, Buffer.from(content), options);
+    return this.publish(queue.key, queue.routingKey, Buffer.from(content), options);
 }
 
 function queue(q, action, content, options) {
