@@ -77,12 +77,13 @@ class RMQ {
     channel() {
         const self = this;
 
-        return new Promise((resolve, reject) => {
-            if (self.existingChannel) return resolve(self.existingChannel);
-
-            return resolve(self._createChannel());
-        })
-        .catch(err => { throw err; });
+        // return new Promise((resolve, reject) => {
+            // if (self.existingChannel) return resolve(self.existingChannel);
+//
+            // return resolve(self._createChannel());
+        // })
+        return self._createChannel()
+            .catch(err => { throw err; });
     }
 
 
@@ -112,8 +113,6 @@ class RMQ {
     _createConnection(options) {
         const self = this;
 
-        console.log(self.url);
-
         return amqp.connect(this.url, options)
             .then(connection => self.existingConnection = connection)
             .catch(err => { throw err; });
@@ -125,13 +124,13 @@ class RMQ {
 
         return self.connection()
             .then(connection => connection.createChannel())
-            .then(channel => {
-                self.existingChannel = channel;
-                self.existingChannel.publishTo = self.publishTo.bind({ self: self, channel });
-                self.existingChannel.queue = self.queue.bind({ self: self, channel });
+            // .then(channel => {
+                // self.existingChannel = channel;
+                // self.existingChannel.publishTo = self.publishTo.bind({ self: self, channel });
+                // self.existingChannel.queue = self.queue.bind({ self: self, channel });
 
-                return self.existingChannel;
-            })
+                // return self.existingChannel;
+            // })
             .catch(err => { throw err; });
     }
 
@@ -288,30 +287,38 @@ class RMQ {
 
 
     publishTo(q, action, content, options) {
-        const { self, channel } = this;
+        // const { self, channel } = this;
+        const self = this;
 
-        return new Promise((resolve, reject) => {
-            const queue = self.queues.filter(arr => arr.name === q)[0].actions[action];
+        return self._createChannel()
+            .then(channel => {
+                const queue = self.queues.filter(arr => arr.name === q)[0].actions[action];
 
-            const exchange = self._findExchange(queue.source);
-            const buffer = self._contentToBuffer(content);
+                const exchange = self._findExchange(queue.source);
+                const buffer = self._contentToBuffer(content);
 
-            const results = this.channel.publish(exchange.key, queue.routingKey, buffer, options);
+                const results = channel.publish(exchange.key, queue.routingKey, buffer, options);
 
-            // blocking loop
-            while (results === undefined) { console.info('broadcasting'); };
+                // blocking loop
+                while (results === undefined) { console.info('broadcasting'); };
 
-            if (!results) return reject(results);
+                if (!results) throw new Error(results);
 
-            return resolve(results);
-        });
+                return results;
+            })
+            .catch(err => { throw err; });
     }
 
 
     queue(q, action, content, options) {
+        const self = this;
         const queue = this.queues.filter(arr => arr.name = q)[0];
 
-        return this.sendToQueue(`${queue.key}.${action}`, self._contentToBuffer(content), options);
+        return this._createChannel()
+            .then(channel => {
+                return channel.sendToQueue(`${queue.key}.${action}`, self._contentToBuffer(content), options);
+            })
+            .catch(err => { throw err; });
     }
 
     _contentToBuffer(content) {
