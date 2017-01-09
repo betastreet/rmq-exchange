@@ -1,10 +1,15 @@
 const amqp = require('amqplib');
 const http = require('http');
 const rabbitConfig = require('rabbit-config.js') || null;
+const log = require('debug')('rmq');
 
 
 class RMQ {
-    constructor() {
+    constructor(customConfig) {
+        log('Constructing RMQ Class');
+
+        const self = this;
+
         this.protocol = (process.env.RABBITMQ_SSL_ENABLED) ? 'amqps://' : 'amqp://';
         this.user = process.env.RABBITMQ_DEFAULT_USER || null;
         this.pass = process.env.RABBITMQ_DEFAULT_PASS || null;
@@ -21,12 +26,26 @@ class RMQ {
 
         this._configured = false;
 
+        const cfg = rabbitConfig || customConfig || null;
 
-        if (rabbitConfig) this.config(rabbitConfig);
+        this.config(cfg)
+            .then(() => self._pause())
+            .then(() => self.create())
+            .catch(err => { log(err); });
     }
 
+    _pause() {
+        return new Promise((resolve, reject) => {
+            setTimeout(() => {
+                log('executing timeout');
+                resolve(true)
+            }, 15000);
+        });
+    }
 
     config(cfg) {
+        log('config(cfg)');
+
         let self = this;
 
         const config = Object.keys(cfg).reduce((acc, key) => {
@@ -37,11 +56,13 @@ class RMQ {
 
         this._configured = true;
 
-        return this;
+        return Promise.resolve(this);
     }
 
 
     connection() {
+        log('connection()');
+
         const self = this;
 
         return new Promise((resolve, reject) => {
@@ -53,41 +74,40 @@ class RMQ {
     }
 
 
-    close() {
-        const self = this;
+    // close() {
+        // log('close()');
 
-        return self.connection()
-            .then(connection => connection.close())
-            .then(() => self.existingConnection = null)
-            .catch(err => { throw err; });
-    }
+        // const self = this;
+
+        // return self.connection()
+            // .then(connection => connection.close())
+            // .then(() => self.existingConnection = null)
+            // .catch(err => { throw err; });
+    // }
 
 
     connect(host) {
+        log('connect(host)');
+
         const self = this;
 
         self.url = `${this.protocol}${this.user}:${this.pass}@${host}`;
 
         return self._createConnection();
-
-        return
     }
 
 
     channel() {
-        const self = this;
+        log('channel()');
 
-        // return new Promise((resolve, reject) => {
-            // if (self.existingChannel) return resolve(self.existingChannel);
-//
-            // return resolve(self._createChannel());
-        // })
-        return self._createChannel()
+        return this._createChannel()
             .catch(err => { throw err; });
     }
 
 
     create(cfg) {
+        log('create(cfg)');
+
         const self = this;
 
         if (cfg) this.config(cfg);
@@ -95,22 +115,20 @@ class RMQ {
         if (!this._configured) throw new Error('No configuration');
 
         return this.connection()
-            .then(() => Promise.all([
-                this._createQueues(),
-                this._createExchanges(),
-                this._createPolicies(),
-                this._createUpstreams(),
-            ]))
-            .then(() => Promise.all([
-                this._bindQueues(),
-                this._createConsumers(),
-            ]))
+            .then(() => self._createQueues())
+            .then(() => self._createExchanges())
+            .then(() => self._createPolicies())
+            .then(() => self._createUpstreams())
+            .then(() => self._bindQueues())
+            .then(() => self._createConsumers())
             .then(() => self)
             .catch(err => { throw err; });
     }
 
 
     _createConnection(options) {
+        log('_createConnection(options)');
+
         const self = this;
 
         return amqp.connect(this.url, options)
@@ -120,22 +138,17 @@ class RMQ {
 
 
     _createChannel() {
-        const self = this;
+        log('_createChannel()');
 
-        return self.connection()
+        return this.connection()
             .then(connection => connection.createChannel())
-            // .then(channel => {
-                // self.existingChannel = channel;
-                // self.existingChannel.publishTo = self.publishTo.bind({ self: self, channel });
-                // self.existingChannel.queue = self.queue.bind({ self: self, channel });
-
-                // return self.existingChannel;
-            // })
             .catch(err => { throw err; });
     }
 
 
     _createQueues() {
+        log('_createQueues()');
+
         const self = this;
 
         return this._createChannel()
@@ -146,12 +159,14 @@ class RMQ {
 
                 return acc;
             }, [self._createChannel()])))
-            .then(response => response[0].close())
+            // .then(response => response[0].close())
             .catch(err => { throw err; });
     }
 
 
     _createExchanges() {
+        log('_createExchanges()');
+
         const self = this;
 
         return this._createChannel()
@@ -160,12 +175,14 @@ class RMQ {
 
                 return acc;
             }, [self._createChannel()])))
-            .then(response => response[0].close())
+            // .then(response => response[0].close())
             .catch(err => { throw err; });
     }
 
 
     _createPolicies() {
+        log('_createPolicies()');
+
         const self = this;
 
         return Promise.all(self.policies.reduce((acc, p) => {
@@ -178,6 +195,8 @@ class RMQ {
 
 
     _createUpstreams() {
+        log('_createUpstreams()');
+
         const self = this;
 
         return Promise.all(self.upstreams.reduce((acc, u) => {
@@ -188,6 +207,8 @@ class RMQ {
 
 
     _createConsumers() {
+        log('_createConsumers()');
+
         const self = this;
 
         return this._createChannel()
@@ -207,11 +228,15 @@ class RMQ {
 
 
     _findExchange(name) {
+        log('_findExchange(name)');
+
         return this.exchanges.find(obj => obj.name === name);
     }
 
 
     _bindQueues() {
+        log('_bindQueues()');
+
         const self = this;
 
         return this._createChannel()
@@ -232,12 +257,14 @@ class RMQ {
 
                 return acc;
             }, [self._createChannel()])))
-            .then(response => response[0].close())
+            // .then(response => response[0].close())
             .catch(err => { throw err; });
     }
 
 
     _createPolicy(policy) {
+        log('_createPolicy(policy');
+
         policy.vhost = policy.vhost || '/';
 
         const options = {
@@ -261,6 +288,8 @@ class RMQ {
 
 
     _createUpstream(upstream) {
+        log('_createUpstream(upstream)');
+
         upstream.vhost = upstream.vhost || '/';
         const path = `${encodeURIComponent(upstream.vhost)}/${encodeURIComponent(upstream.name)}`;
 
@@ -287,7 +316,8 @@ class RMQ {
 
 
     publishTo(q, action, content, options) {
-        // const { self, channel } = this;
+        log('publishTo(q, action, content, options)');
+
         const self = this;
 
         return self._createChannel()
@@ -311,6 +341,8 @@ class RMQ {
 
 
     queue(q, action, content, options) {
+        log('queue(q, action, content, options)');
+
         const self = this;
         const queue = this.queues.filter(arr => arr.name = q)[0];
 
@@ -322,6 +354,8 @@ class RMQ {
     }
 
     _contentToBuffer(content) {
+        log('_contentToBuffer(content)');
+
         return (typeof content === 'object')
             ? new Buffer(JSON.stringify(content))
             : new Buffer(content);
