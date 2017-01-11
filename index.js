@@ -29,7 +29,7 @@ class RMQ {
         const cfg = rabbitConfig || customConfig || null;
 
         this.config(cfg)
-            .then(() => self._pause())
+            // .then(() => self._pause())
             .then(() => self.create())
             .catch(err => { log(err); });
     }
@@ -140,9 +140,18 @@ class RMQ {
     _createChannel() {
         log('_createChannel()');
 
-        return this.connection()
-            .then(connection => connection.createChannel())
-            .catch(err => { throw err; });
+        return new Promise((resolve, reject) => {
+            if (this._chan) return resolve(this._chan);
+
+            this.connection()
+                .then(connection => connection.createChannel())
+                .then(channel => {
+                    this._chan = channel;
+
+                    return resolve(channel);
+                })
+                .catch(console.error)
+        });
     }
 
 
@@ -158,7 +167,7 @@ class RMQ {
                 });
 
                 return acc;
-            }, [self._createChannel()])))
+            }, [channel])))
             // .then(response => response[0].close())
             .catch(err => { throw err; });
     }
@@ -170,11 +179,14 @@ class RMQ {
         const self = this;
 
         return this._createChannel()
+            .then((channel) => {
+                return channel;
+            })
             .then(channel => Promise.all(self.exchanges.reduce((acc, x) => {
                 acc.concat([channel.assertExchange(x.key, x.type, x.options)]);
 
                 return acc;
-            }, [self._createChannel()])))
+            }, [channel])))
             // .then(response => response[0].close())
             .catch(err => { throw err; });
     }
@@ -256,7 +268,7 @@ class RMQ {
                 });
 
                 return acc;
-            }, [self._createChannel()])))
+            }, [channel])))
             // .then(response => response[0].close())
             .catch(err => { throw err; });
     }
@@ -337,6 +349,20 @@ class RMQ {
                 return results;
             })
             .catch(err => { throw err; });
+    }
+
+    consumeFrom(q, action, callback) {
+        log('consumeFrom()');
+
+        const queue = this.queues.filter(arr => arr.name === q)[0];
+
+        return new Promise((resolve, reject) => {
+            this._createChannel()
+                .then(channel => {
+                    channel.consume(`${queue.key}.${action}`, (msg) => callback(msg, channel));
+                })
+                .catch(err => { throw err; });
+        });
     }
 
 
