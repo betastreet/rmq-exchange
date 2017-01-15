@@ -74,16 +74,22 @@ class RMQ {
     }
 
 
-    // close() {
-        // log('close()');
+    close() {
+        log('close()');
 
-        // const self = this;
+        const self = this;
 
-        // return self.connection()
-            // .then(connection => connection.close())
-            // .then(() => self.existingConnection = null)
-            // .catch(err => { throw err; });
-    // }
+        return new Promise((resolve, reject) => {
+            self.connection()
+                .then(connection => connection.close())
+                .then(() => {
+                    self.existingConnection = null;
+                    resolve();
+                })
+                .catch(err => { reject(err); });
+        })
+        .catch(err => { throw err; });
+    }
 
 
     connect(host) {
@@ -168,7 +174,6 @@ class RMQ {
 
                 return acc;
             }, [channel])))
-            // .then(response => response[0].close())
             .catch(err => { throw err; });
     }
 
@@ -187,7 +192,6 @@ class RMQ {
 
                 return acc;
             }, [channel])))
-            // .then(response => response[0].close())
             .catch(err => { throw err; });
     }
 
@@ -269,7 +273,6 @@ class RMQ {
 
                 return acc;
             }, [channel])))
-            // .then(response => response[0].close())
             .catch(err => { throw err; });
     }
 
