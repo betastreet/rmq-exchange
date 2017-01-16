@@ -1,19 +1,5 @@
-describe('RMQ', () => {
-    describe('#init', () => {
-        it('', () => {
-            expect(true).toBe(true);
-        })
-    });
+/* global describe it expect */
 
-    describe('#connect', () => {
-        it('', () => {
-            expect(true).toBe(true);
-        })
-    });
+describe('RMQ-Exchange', () => {
 
-    describe('#channel', () => {
-        it('', () => {
-            expect(true).toBe(true);
-        })
-    });
 });
