@@ -1,0 +1,21 @@
+version: "2"
+
+services:
+
+  rabbitmq:
+    command: rabbitmq-server
+    image: ringpartner/rabbitmq-federation
+    logging:
+      driver: "json-file"
+    mem_limit: 512m
+    ports:
+      - 15672:15672
+      - 5672:5672
+      - 5671:5671
+    environment:
+      - PORT=15672
+      - CONSUL_AGENT=1
+      - CONSUL=consul
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    restart: always

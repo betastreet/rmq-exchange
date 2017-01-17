@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "NODE_ENV=test jest"
+    "test": "RABBITMQ_DEFAULT_USER=guest RABBITMQ_DEFAULT_PASS=guest RABBITMQ_HOST=localhost NODE_PATH=. NODE_ENV=test jest --watch"
   },
   "repository": {
     "type": "git",
@@ -21,16 +21,12 @@
     "amqplib": "^0.5.1"
   },
   "devDependencies": {
-    "eslint": "^3.12.0",
-    "eslint-config-airbnb-base": "^11.0.0",
-    "eslint-plugin-import": "^2.2.0",
-    "jest": "^17.0.3",
-    "debug": "2.6.0"
+    "jest": "^18.1.0"
   },
   "eslintConfig": {
     "env": {
-        "node": true,
-        "es6": true
+      "node": true,
+      "es6": true
     },
     "extents": "airbnb-base",
     "sourceType": "module"
@@ -38,6 +34,7 @@
   "jest": {
     "bail": true,
     "verbose": true,
-    "collectCoverage": true
+    "collectCoverage": true,
+    "automock": false
   }
 }

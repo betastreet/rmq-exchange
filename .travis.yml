@@ -1,11 +1,16 @@
+sudo: required
 language: node_js
+services:
+    - docker
 node_js:
   - "6"
+
+before_install:
+    - docker-compose up -d rabbitmq
 
 # safelist
 branches:
   only:
     - master
-    - develop
 
 script: npm test

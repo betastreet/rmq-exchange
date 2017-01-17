@@ -1,293 +1,230 @@
 const amqp = require('amqplib');
 const http = require('http');
-const rabbitConfig = require('rabbit-config.js') || null;
-const log = require('debug')('rmq');
+const rabbitConfig = require('rabbit-config.js');
+
+const state = {
+    connection: null,
+    channel: null,
+    config: {},
+}
+
+const _ = {
+    contentToBuffer,
+    generateConfiguration,
+    create,
+    // connection,
+    channel,
+    createQueues,
+    createExchanges,
+    createPolicies,
+    createUpstreams,
+    bindQueues,
+    findExchange,
+    createConsumers,
+    close,
+};
+
+// API for interacting with Rabbit MQ
+// ==================================
+// Public APIs
+// - initialize - shouldn't be called all the time only on reconnection
+// - channel
+// - publishTo
+// - consumeFrom
+// - queue
 
 
 class RMQ {
-    constructor(customConfig) {
-        log('Constructing RMQ Class');
+    constructor() {
+        this.initialize;
+    }
 
+    get initialize() {
         const self = this;
 
-        this.protocol = (process.env.RABBITMQ_SSL_ENABLED) ? 'amqps://' : 'amqp://';
-        this.user = process.env.RABBITMQ_DEFAULT_USER || null;
-        this.pass = process.env.RABBITMQ_DEFAULT_PASS || null;
-        this.host = process.env.RABBITMQ_HOST || null;
-        this.port = process.env.RABBITMQ_PORT || 5672;
-        this.adminPort = process.env.RABBITMQ_ADMIN_PORT || 15672;
-        this.url = `${this.protocol}${this.user}:${this.pass}@${this.host}`;
-        this.queues = [];
-        this.exchanges = [];
-        this.policies = [];
-        this.upstreams = [];
-        this.existingConnection = null;
-        this.existingChannel = null;
+        const promises = [];
 
-        this._configured = false;
+        if (!Object.keys(state.config).length) {
+            promises.push(_.generateConfiguration());
+        }
 
-        const cfg = rabbitConfig || customConfig || null;
-
-        this.config(cfg)
-            // .then(() => self._pause())
-            .then(() => self.create())
-            .catch(err => { log(err); });
-    }
-
-    _pause() {
-        return new Promise((resolve, reject) => {
-            setTimeout(() => {
-                log('executing timeout');
-                resolve(true)
-            }, 15000);
-        });
-    }
-
-    config(cfg) {
-        log('config(cfg)');
-
-        let self = this;
-
-        const config = Object.keys(cfg).reduce((acc, key) => {
-            if (acc[key]) acc[key] = cfg[key];
-
-            return acc;
-        }, self);
-
-        this._configured = true;
-
-        return Promise.resolve(this);
+        return Promise.all(promises)
+            .then(() => _.create())
     }
 
 
-    connection() {
-        log('connection()');
-
-        const self = this;
-
-        return new Promise((resolve, reject) => {
-            if (self.existingConnection) return resolve(self.existingConnection);
-
-            return resolve(this._createConnection());
-        })
-        .catch(err => { throw err; });
+    get config() {
+        return state.config;
     }
 
 
-    close() {
-        log('close()');
+    get state() {
+        return state;
+    }
 
-        const self = this;
+
+    get channel() {
+        return _.channel();
+    }
+
+
+    get close() {
+        return _.close();
+    }
+
+
+    publishTo(q, action, content, options) {
+        return channel()
+            .then(Channel => {
+                const queue = state.config.queues.filter(arr => arr.name === q)[0].actions[action];
+
+                const exchange = _.findExchange(queue.source);
+                const buffer = _.contentToBuffer(content);
+
+                const results = Channel.publish(exchange.key, queue.routingKey, buffer, options);
+
+                // blocking loop
+                while (!results) { console.info('broadcasting'); };
+
+                if (!results) throw new Error(results);
+
+                return results;
+            })
+            .catch(err => { throw new Error(err); });
+    }
+
+    consumeFrom(q, action, callback) {
+        const queue = state.config.queues.filter(arr => arr.name === q)[0];
 
         return new Promise((resolve, reject) => {
-            self.connection()
-                .then(connection => connection.close())
-                .then(() => {
-                    self.existingConnection = null;
-                    resolve();
-                })
-                .catch(err => { reject(err); });
-        })
-        .catch(err => { throw err; });
-    }
-
-
-    connect(host) {
-        log('connect(host)');
-
-        const self = this;
-
-        self.url = `${this.protocol}${this.user}:${this.pass}@${host}`;
-
-        return self._createConnection();
-    }
-
-
-    channel() {
-        log('channel()');
-
-        return this._createChannel()
-            .catch(err => { throw err; });
-    }
-
-
-    create(cfg) {
-        log('create(cfg)');
-
-        const self = this;
-
-        if (cfg) this.config(cfg);
-
-        if (!this._configured) throw new Error('No configuration');
-
-        return this.connection()
-            .then(() => self._createQueues())
-            .then(() => self._createExchanges())
-            .then(() => self._createPolicies())
-            .then(() => self._createUpstreams())
-            .then(() => self._bindQueues())
-            .then(() => self._createConsumers())
-            .then(() => self)
-            .catch(err => { throw err; });
-    }
-
-
-    _createConnection(options) {
-        log('_createConnection(options)');
-
-        const self = this;
-
-        return amqp.connect(this.url, options)
-            .then(connection => self.existingConnection = connection)
-            .catch(err => { throw err; });
-    }
-
-
-    _createChannel() {
-        log('_createChannel()');
-
-        return new Promise((resolve, reject) => {
-            if (this._chan) return resolve(this._chan);
-
-            this.connection()
-                .then(connection => connection.createChannel())
+            _.channel()
                 .then(channel => {
-                    this._chan = channel;
-
-                    return resolve(channel);
+                    channel.consume(`${queue.key}.${action}`, (msg) => callback(msg, channel));
                 })
-                .catch(console.error)
+                .catch(err => reject(err));
         });
     }
 
 
-    _createQueues() {
-        log('_createQueues()');
+    queue(q, action, content, options) {
+        const queue = state.config.queues.filter(arr => arr.name = q)[0];
 
-        const self = this;
-
-        return this._createChannel()
-            .then(channel => Promise.all(self.queues.reduce((acc, q) => {
-                Object.keys(q.actions).forEach(action => {
-                    acc.concat([channel.assertQueue(`${q.key}.${action}`, q.actions[action].options)]);
-                });
-
-                return acc;
-            }, [channel])))
-            .catch(err => { throw err; });
-    }
-
-
-    _createExchanges() {
-        log('_createExchanges()');
-
-        const self = this;
-
-        return this._createChannel()
-            .then((channel) => {
-                return channel;
+        return _.channel()
+            .then(Channel => {
+                return Channel.sendToQueue(`${queue.key}.${action}`, _.contentToBuffer(content), options);
             })
-            .then(channel => Promise.all(self.exchanges.reduce((acc, x) => {
-                acc.concat([channel.assertExchange(x.key, x.type, x.options)]);
-
-                return acc;
-            }, [channel])))
-            .catch(err => { throw err; });
     }
+}
+
+module.exports = new RMQ();
 
 
-    _createPolicies() {
-        log('_createPolicies()');
+// -------------------------------------
 
-        const self = this;
 
-        return Promise.all(self.policies.reduce((acc, p) => {
-            acc.concat([self._createPolicy(p)]);
+function contentToBuffer(content) {
+    return (typeof content === 'object')
+        ? new Buffer(JSON.stringify(content))
+        : new Buffer(content);
+}
+
+
+function generateConfiguration() {
+    return new Promise((resolve, reject) => {
+        state.config = {
+            protocol: (process.env.RABBITMQ_SSL_ENABLED) ? 'amqps://' : 'amqp://',
+            user: process.env.RABBITMQ_DEFAULT_USER || null,
+            pass: process.env.RABBITMQ_DEFAULT_PASS || null,
+            host: process.env.RABBITMQ_HOST || null,
+            port: process.env.RABBITMQ_PORT || 5672,
+            adminPort: process.env.RABBITMQ_ADMIN_PORT || 15672,
+            queues: [],
+            exchanges: [],
+            policies: [],
+            upstreams: [],
+        };
+
+        state.config.url = `${state.config.protocol}${state.config.user}:${state.config.pass}@${state.config.host}`,
+
+        Object.keys(rabbitConfig).reduce((acc, key) => {
+            acc[key] = rabbitConfig[key];
 
             return acc;
-        }, []))
+        }, state.config);
+
+        return resolve(state.config);
+    });
+}
+
+function create() {
+    const promises = [];
+
+    if (!state.config) {
+        promises.push(generateConfiguration());
+    }
+
+    return Promise.all(promises)
+        .then(() => {
+            if (!state.config) {
+                throw new Error('No Configuration');
+            }
+
+            return;
+        })
+        .then(() => _.createQueues())
+        .then(() => _.createExchanges())
+        .then(() => _.createPolicies())
+        .then(() => _.createUpstreams())
+        .then(() => _.bindQueues())
+        .then(() => _.createConsumers())
+}
+
+function channel() {
+    return amqp.connect(state.config.url)
+        .then(con => con.createChannel())
+        .then(ch => state.channel = ch)
         .catch(err => { throw err; });
-    }
+}
 
 
-    _createUpstreams() {
-        log('_createUpstreams()');
+function createQueues() {
+    return _.channel()
+        .then(Channel => Promise.all(state.config.queues.reduce((acc, q) => {
+            Object.keys(q.actions).forEach(action => {
+                acc.concat([Channel.assertQueue(`${q.key}.${action}`, q.actions[action].options)]);
+            });
 
-        const self = this;
+            return acc;
+        }, [Channel])))
+}
 
-        return Promise.all(self.upstreams.reduce((acc, u) => {
-            return acc.concat([self._createUpstream(u)]);
-        }, []))
-        .catch(err => { throw err; });
-    }
+function createExchanges() {
+    return _.channel()
+        .then(Channel => Promise.all(state.config.exchanges.reduce((acc, x) => {
+            acc.concat([Channel.assertExchange(x.key, x.type, x.options)]);
 
+            return acc;
+        }, [Channel])))
+}
 
-    _createConsumers() {
-        log('_createConsumers()');
+function createPolicies() {
+    const promises = state.config.policies.reduce((acc, p) => {
+        acc.concat([createPolicy(p)]);
+        return acc;
+    }, []);
 
-        const self = this;
-
-        return this._createChannel()
-            .then(channel => {
-                self.queues.forEach(q => {
-                    Object.keys(q.actions).forEach(action => {
-                        const queue = q.actions[action];
-
-                        if (queue.consume && self._findExchange(queue.source)) {
-                            channel.consume(`${q.key}.${action}`, (msg) => queue.consume(msg, channel));
-                        }
-                    });
-                });
-            })
-            .catch(err => { throw err; });
-    }
+    return Promise.all(promises)
 
 
-    _findExchange(name) {
-        log('_findExchange(name)');
-
-        return this.exchanges.find(obj => obj.name === name);
-    }
-
-
-    _bindQueues() {
-        log('_bindQueues()');
-
-        const self = this;
-
-        return this._createChannel()
-            .then(channel => Promise.all(self.queues.reduce((acc, q) => {
-                Object.keys(q.actions).forEach(action => {
-                    const queue = q.actions[action];
-
-                    const exchange = self._findExchange(queue.source);
-                    const queueAction = `${q.key}.${action}`;
-                    const routing = queue.pattern || queue.routingKey;
-
-                    if (exchange && !queue.noBind) {
-                        acc.concat([
-                            channel.bindQueue(queueAction, exchange.key, routing),
-                        ]);
-                    }
-                });
-
-                return acc;
-            }, [channel])))
-            .catch(err => { throw err; });
-    }
-
-
-    _createPolicy(policy) {
-        log('_createPolicy(policy');
-
+    function createPolicy(policy) {
         policy.vhost = policy.vhost || '/';
 
         const options = {
             method: 'PUT',
             path: `/api/policies/${encodeURIComponent(policy.vhost)}/${encodeURIComponent(policy.name)}`,
-            auth: `${this.user}:${this.pass}`,
-            hostname: `${this.host}`,
-            port: this.adminPort,
+            auth: `${state.config.user}:${state.config.pass}`,
+            hostname: `${state.config.host}`,
+            port: state.config.adminPort,
             headers: {
                 'Content-Type': 'application/json',
             },
@@ -295,25 +232,34 @@ class RMQ {
 
         return new Promise((resolve, reject) => {
             const req = http.request(options, res => resolve(res));
+
             req.on('error', err => reject(err));
+
             req.write(JSON.stringify(policy));
+
             req.end();
         });
     }
+}
 
 
-    _createUpstream(upstream) {
-        log('_createUpstream(upstream)');
 
+function createUpstreams() {
+    return Promise.all(state.config.upstreams.reduce((acc, u) => {
+        return acc.concat([_.createUpstream(u)]);
+    }, []))
+
+
+    function createUpstream(upstream) {
         upstream.vhost = upstream.vhost || '/';
         const path = `${encodeURIComponent(upstream.vhost)}/${encodeURIComponent(upstream.name)}`;
 
         const options = {
             method: 'PUT',
             path: `/api/parameters/federation-upstream/${path}`,
-            auth: `${this.user}:${this.pass}`,
-            hostname: `${this.host}`,
-            port: this.adminPort,
+            auth: `${state.config.user}:${state.config.pass}`,
+            hostname: `${state.config.host}`,
+            port: state.config.adminPort,
             headers: {
                 'Content-Type': 'application/json',
             },
@@ -325,72 +271,54 @@ class RMQ {
             req.write(JSON.stringify(upstream));
             req.end();
         })
-        .catch(err => { throw err; });
-
     }
-
-
-    publishTo(q, action, content, options) {
-        log('publishTo(q, action, content, options)');
-
-        const self = this;
-
-        return self._createChannel()
-            .then(channel => {
-                const queue = self.queues.filter(arr => arr.name === q)[0].actions[action];
-
-                const exchange = self._findExchange(queue.source);
-                const buffer = self._contentToBuffer(content);
-
-                const results = channel.publish(exchange.key, queue.routingKey, buffer, options);
-
-                // blocking loop
-                while (results === undefined) { console.info('broadcasting'); };
-
-                if (!results) throw new Error(results);
-
-                return results;
-            })
-            .catch(err => { throw err; });
-    }
-
-    consumeFrom(q, action, callback) {
-        log('consumeFrom()');
-
-        const queue = this.queues.filter(arr => arr.name === q)[0];
-
-        return new Promise((resolve, reject) => {
-            this._createChannel()
-                .then(channel => {
-                    channel.consume(`${queue.key}.${action}`, (msg) => callback(msg, channel));
-                })
-                .catch(err => { throw err; });
-        });
-    }
-
-
-    queue(q, action, content, options) {
-        log('queue(q, action, content, options)');
-
-        const self = this;
-        const queue = this.queues.filter(arr => arr.name = q)[0];
-
-        return this._createChannel()
-            .then(channel => {
-                return channel.sendToQueue(`${queue.key}.${action}`, self._contentToBuffer(content), options);
-            })
-            .catch(err => { throw err; });
-    }
-
-    _contentToBuffer(content) {
-        log('_contentToBuffer(content)');
-
-        return (typeof content === 'object')
-            ? new Buffer(JSON.stringify(content))
-            : new Buffer(content);
-    }
-
 }
 
-module.exports = exports = new RMQ();
 
+function bindQueues() {
+    return _.channel()
+        .then(Channel => Promise.all(state.config.queues.reduce((acc, q) => {
+            Object.keys(q.actions).forEach(action => {
+                const queue = q.actions[action];
+
+                const exchange = _.findExchange(queue.source);
+                const queueAction = `${q.key}.${action}`;
+                const routing = queue.pattern || queue.routingKey;
+
+                if (exchange && !queue.noBind) {
+                    acc.concat([
+                        Channel.bindQueue(queueAction, exchange.key, routing),
+                    ]);
+                }
+            });
+
+            return acc;
+        }, [Channel])))
+}
+
+function findExchange(name) {
+    return state.config.exchanges.find(obj => obj.name === name);
+}
+
+function createConsumers() {
+    return _.channel()
+        .then(Channel => {
+            state.config.queues.forEach(q => {
+                Object.keys(q.actions).forEach(action => {
+                    const queue = q.actions[action];
+
+                    if (queue.consume && _.findExchange(queue.source)) {
+                        Channel.consume(`${q.key}.${action}`, (msg) => queue.consume(msg, Channel));
+                    }
+                });
+            });
+        })
+}
+
+function close() {
+    return Promise.resolve()
+        .then(() => state.channel.close())
+        .then(() => {
+            state.channel = undefined
+        });
+}

@@ -2,7 +2,7 @@ const $ = (process.env.NODE_ENV === 'production');
 
 module.exports = {
     queues: [{
-        name: 'campaigns',
+        name: 'Campaigns',
         key: ($) ? 'campaigns' : 'testCampaigns',
         actions: {
             update: {
@@ -17,10 +17,6 @@ module.exports = {
             create: {
                 source: 'Campaigns',
                 routingKey: ($) ? 'campaign.create' : 'test.campaign.create',
-                consume: (msg, channel) => {
-                    console.log(msg);
-                    channel.ack(msg);
-                },
             },
             delete: {
                 source: 'Campaigns',
