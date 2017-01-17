@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "RABBITMQ_DEFAULT_USER=guest RABBITMQ_DEFAULT_PASS=guest RABBITMQ_HOST=localhost NODE_PATH=. NODE_ENV=test jest --watch"
+    "test": "RABBITMQ_DEFAULT_USER=guest RABBITMQ_DEFAULT_PASS=guest RABBITMQ_HOST=localhost NODE_PATH=. NODE_ENV=test jest"
   },
   "repository": {
     "type": "git",
