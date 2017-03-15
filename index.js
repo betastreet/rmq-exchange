@@ -6,7 +6,7 @@ const state = {
     connection: null,
     channel: null,
     config: {},
-}
+};
 
 const _ = {
     contentToBuffer,
@@ -36,12 +36,10 @@ const _ = {
 
 class RMQ {
     constructor() {
-        this.initialize;
+        this.initialize();
     }
 
-    get initialize() {
-        const self = this;
-
+    initialize() {
         const promises = [];
 
         if (!Object.keys(state.config).length) {
@@ -49,7 +47,7 @@ class RMQ {
         }
 
         return Promise.all(promises)
-            .then(() => _.create())
+            .then(() => _.create());
     }
 
 
@@ -93,6 +91,42 @@ class RMQ {
             .catch(err => { throw new Error(err); });
     }
 
+    /**
+     * Wait for the queue to be created
+     * @param q {String} Queue key
+     * @param action {String} Queue action
+     * @param opts {Object} An object that might carry options for channel.assertQueue
+     * @returns {Promise}
+     */
+    assertQueue(q, action, opts = {}) {
+        const queue = state.config.queues.filter(arr => arr.name === q)[0];
+
+        if (!q) {
+            return Promise.reject(`No queue ${q} with action ${action} found`);
+        }
+
+        return _.channel()
+        .then(() => {
+            return state.channel.assertQueue(`${queue.key}.${action}`, opts);
+        });
+    }
+
+    /**
+     * Set consuming callback to the queue that might not has been yet created
+     * @param q {String} Queue key
+     * @param action {String} Queue action
+     * @param callback {Function} An object that might carry options for channel.assertQueue
+     */
+    consumeFromWaitQueue(q, action, callback) {
+        this.assertQueue(q, action)
+        .then(() => {
+            this.consumeFrom(q, action, (msg, _channel) => {
+                callback(msg, _channel);
+            });
+        })
+        .catch((err) => { throw err; });
+    }
+
     consumeFrom(q, action, callback) {
         const queue = state.config.queues.filter(arr => arr.name === q)[0];
 
@@ -112,7 +146,7 @@ class RMQ {
         return _.channel()
             .then(Channel => {
                 return Channel.sendToQueue(`${queue.key}.${action}`, _.contentToBuffer(content), options);
-            })
+            });
     }
 }
 
@@ -144,7 +178,7 @@ function generateConfiguration() {
             upstreams: [],
         };
 
-        state.config.url = `${state.config.protocol}${state.config.user}:${state.config.pass}@${state.config.host}`,
+        state.config.url = `${state.config.protocol}${state.config.user}:${state.config.pass}@${state.config.host}`;
 
         Object.keys(rabbitConfig).reduce((acc, key) => {
             acc[key] = rabbitConfig[key];
@@ -195,7 +229,7 @@ function createQueues() {
             });
 
             return acc;
-        }, [Channel])))
+        }, [Channel])));
 }
 
 function createExchanges() {
@@ -204,7 +238,7 @@ function createExchanges() {
             acc.concat([Channel.assertExchange(x.key, x.type, x.options)]);
 
             return acc;
-        }, [Channel])))
+        }, [Channel])));
 }
 
 function createPolicies() {
@@ -213,7 +247,7 @@ function createPolicies() {
         return acc;
     }, []);
 
-    return Promise.all(promises)
+    return Promise.all(promises);
 
 
     function createPolicy(policy) {
@@ -247,7 +281,7 @@ function createPolicies() {
 function createUpstreams() {
     return Promise.all(state.config.upstreams.reduce((acc, u) => {
         return acc.concat([_.createUpstream(u)]);
-    }, []))
+    }, []));
 
 
     function createUpstream(upstream) {
@@ -270,7 +304,7 @@ function createUpstreams() {
             req.on('error', err => reject(err));
             req.write(JSON.stringify(upstream));
             req.end();
-        })
+        });
     }
 }
 
@@ -293,7 +327,7 @@ function bindQueues() {
             });
 
             return acc;
-        }, [Channel])))
+        }, [Channel])));
 }
 
 function findExchange(name) {
@@ -312,13 +346,13 @@ function createConsumers() {
                     }
                 });
             });
-        })
+        });
 }
 
 function close() {
     return Promise.resolve()
-        .then(() => state.channel.close())
+        .then(() => { return state.channel ? state.channel.close() : Promise.resolve(); })
         .then(() => {
-            state.channel = undefined
+            state.channel = undefined;
         });
 }
