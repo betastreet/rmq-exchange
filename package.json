@@ -8,15 +8,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gregdaynes/rmq-exchange.git"
+    "url": "git+https://github.com/betastreet/rmq-exchange.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/gregdaynes/rmq-exchange/issues"
+    "url": "https://github.com/betastreet/rmq-exchange/issues"
   },
-  "homepage": "https://github.com/gregdaynes/rmq-exchange#readme",
+  "homepage": "https://github.com/betastreet/rmq-exchange#readme",
   "dependencies": {
     "amqplib": "^0.5.1"
   },
