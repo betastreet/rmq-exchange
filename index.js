@@ -12,7 +12,7 @@ const _ = {
     contentToBuffer,
     generateConfiguration,
     create,
-    // connection,
+    connection,
     channel,
     createQueues,
     createExchanges,
@@ -40,6 +40,7 @@ class RMQ {
     }
 
     initialize() {
+
         const promises = [];
 
         if (!Object.keys(state.config).length) {
@@ -55,21 +56,25 @@ class RMQ {
         return state.config;
     }
 
-
     get state() {
         return state;
     }
 
-
-    get channel() {
+    channel() {
         return _.channel();
     }
 
-
-    get close() {
+    close() {
         return _.close();
     }
 
+    connect(host, port) {
+        return _.generateConfiguration(host, port).then((config) => {
+            return _.connection();
+        }).then((con) => {
+            return _.create();
+        }).catch(console.log);
+    }
 
     publishTo(q, action, content, options) {
         return channel()
@@ -107,7 +112,9 @@ class RMQ {
 
         return _.channel()
         .then(() => {
-            return state.channel.assertQueue(`${queue.key}.${action}`, opts);
+            return state.channel.then((ch) => {
+                ch.assertQueue(`${queue.key}.${action}`, opts);
+            });
         });
     }
 
@@ -163,14 +170,16 @@ function contentToBuffer(content) {
 }
 
 
-function generateConfiguration() {
+function generateConfiguration(host, port) {
+    if (!host) host = process.env.RABBITMQ_HOST;
+    if (!port) port = 5672;
     return new Promise((resolve, reject) => {
         state.config = {
             protocol: (process.env.RABBITMQ_SSL_ENABLED) ? 'amqps://' : 'amqp://',
             user: process.env.RABBITMQ_DEFAULT_USER || null,
             pass: process.env.RABBITMQ_DEFAULT_PASS || null,
-            host: process.env.RABBITMQ_HOST || null,
-            port: process.env.RABBITMQ_PORT || 5672,
+            host: host,
+            port: port,
             adminPort: process.env.RABBITMQ_ADMIN_PORT || 15672,
             queues: [],
             exchanges: [],
@@ -213,11 +222,25 @@ function create() {
         .then(() => _.createConsumers())
 }
 
-function channel() {
-    return amqp.connect(state.config.url)
-        .then(con => con.createChannel())
-        .then(ch => state.channel = ch)
+function connection() {
+    if (state.connection) {
+        return state.connection;
+    }
+    state.connection = amqp.connect(state.config.url)
+        .then(con => {
+            return con;
+        })
         .catch(err => { throw err; });
+    return state.connection;
+}
+
+function channel() {
+    if (state.channel) return state.channel;
+    state.channel = connection().then(con => {
+            return con.createChannel();
+        })
+        .catch(err => { throw err; });
+    return state.channel;
 }
 
 
@@ -350,9 +373,20 @@ function createConsumers() {
 }
 
 function close() {
-    return Promise.resolve()
-        .then(() => { return state.channel ? state.channel.close() : Promise.resolve(); })
-        .then(() => {
-            state.channel = undefined;
+    if (!state.connection) {
+        return Promise.resolve();
+    }
+    return state.channel.then((ch) => {
+            if (ch) ch.close();
+        }).then(() => {
+            state.channel = null;
+            return state.connection;
+        }).then((con) => {
+            if (con) con.close();
+        }).then(() => {
+            state.connection = null;
+        }).catch((err) => {
+            state.channel = null;
+            state.connection = null;
         });
 }
