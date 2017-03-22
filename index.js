@@ -37,6 +37,7 @@ const _ = {
 class RMQ {
     constructor() {
         this.initialize();
+        this.consumers = [];
     }
 
     initialize() {
@@ -73,6 +74,12 @@ class RMQ {
             return _.connection();
         }).then((con) => {
             return _.create();
+        }).then(() => {
+            if (this.consumers && this.consumers.length) {
+                this.consumers.forEach((consumer) => {
+                    this.consumeFromWaitQueue(consumer.q, consumer.action, consumer.callback);
+                });
+            }
         }).catch(console.log);
     }
 
@@ -113,7 +120,7 @@ class RMQ {
         return _.channel()
         .then(() => {
             return state.channel.then((ch) => {
-                ch.assertQueue(`${queue.key}.${action}`, opts);
+                return ch.assertQueue(`${queue.key}.${action}`, opts);
             });
         });
     }
@@ -125,6 +132,7 @@ class RMQ {
      * @param callback {Function} An object that might carry options for channel.assertQueue
      */
     consumeFromWaitQueue(q, action, callback) {
+        this.consumers.push({ q, action, callback });
         this.assertQueue(q, action)
         .then(() => {
             this.consumeFrom(q, action, (msg, _channel) => {
