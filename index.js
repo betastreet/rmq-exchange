@@ -80,7 +80,7 @@ class RMQ {
                     this.consumeFromWaitQueue(consumer.q, consumer.action, consumer.callback);
                 });
             }
-        }).catch(console.log);
+        }).catch((err) => { throw err; });
     }
 
     publishTo(q, action, content, options) {
@@ -100,7 +100,7 @@ class RMQ {
 
                 return results;
             })
-            .catch(err => { throw new Error(err); });
+            .catch(err => { throw err; });
     }
 
     /**
@@ -122,7 +122,8 @@ class RMQ {
             return state.channel.then((ch) => {
                 return ch.assertQueue(`${queue.key}.${action}`, opts);
             });
-        });
+        })
+        .catch(err => { throw err; });
     }
 
     /**
@@ -133,13 +134,13 @@ class RMQ {
      */
     consumeFromWaitQueue(q, action, callback) {
         this.consumers.push({ q, action, callback });
-        this.assertQueue(q, action)
+        return this.assertQueue(q, action)
         .then(() => {
             this.consumeFrom(q, action, (msg, _channel) => {
                 callback(msg, _channel);
             });
         })
-        .catch((err) => { throw err; });
+        .catch((err) => { console.error(`rmq-exchange failed setting up consumer ${q}-${action}.`, err.toString()); });
     }
 
     consumeFrom(q, action, callback) {
@@ -161,7 +162,8 @@ class RMQ {
         return _.channel()
             .then(Channel => {
                 return Channel.sendToQueue(`${queue.key}.${action}`, _.contentToBuffer(content), options);
-            });
+            })
+            .catch(err => { throw err; });
     }
 }
 
@@ -228,12 +230,14 @@ function create() {
         .then(() => _.createUpstreams())
         .then(() => _.bindQueues())
         .then(() => _.createConsumers())
+        .catch(err => { console.error('rmq-exchange failed to create all resources.', err.toString()); });
 }
 
 function connection() {
     if (state.connection) {
         return state.connection;
     }
+
     state.connection = amqp.connect(state.config.url)
         .then(con => {
             return con;
@@ -244,7 +248,9 @@ function connection() {
 
 function channel() {
     if (state.channel) return state.channel;
+
     state.channel = connection().then(con => {
+
             return con.createChannel();
         })
         .catch(err => { throw err; });
@@ -260,7 +266,8 @@ function createQueues() {
             });
 
             return acc;
-        }, [Channel])));
+        }, [Channel])))
+        .catch(err => { throw err; });
 }
 
 function createExchanges() {
@@ -269,7 +276,8 @@ function createExchanges() {
             acc.concat([Channel.assertExchange(x.key, x.type, x.options)]);
 
             return acc;
-        }, [Channel])));
+        }, [Channel])))
+        .catch(err => { throw err; });
 }
 
 function createPolicies() {
@@ -358,7 +366,8 @@ function bindQueues() {
             });
 
             return acc;
-        }, [Channel])));
+        }, [Channel])))
+        .catch(err => { throw err; });
 }
 
 function findExchange(name) {
@@ -377,7 +386,8 @@ function createConsumers() {
                     }
                 });
             });
-        });
+        })
+        .catch(err => { throw err; });
 }
 
 function close() {
