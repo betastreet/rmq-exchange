@@ -104,6 +104,52 @@ class RMQ {
     }
 
     /**
+     * Publish message to exchange
+     * @param content {String} Message body
+     * @param actionName {String} action from the actionsPublish section of the rabbit-config.js
+     * actionsPublish: {
+     *     update: {
+     *         exchange: 'Direct',
+     *         routingKey: 'advertiser.update',
+     *     },
+     *     create: {
+     *         exchange: 'Direct',
+     *         routingKey: 'advertiser.create',
+     *     },
+     *     destroy: {
+     *         exchange: 'Direct',
+     *         routingKey: 'advertiser.destroy',
+     *     },
+     * },
+     *
+     * exchanges: [{
+     *     name: 'Direct',
+     *     key: 'amq.direct',
+     *     type: 'direct',
+     * }],
+     *
+     * Usage:
+     * rabbit.publishToExchange({
+     *     key: 'value',
+     * }, 'update');
+     *
+     * @returns {Promise.<TResult>}
+     */
+    publishToExchange(content, actionName) {
+        const action = state.config.actionsPublish[actionName];
+        const exchange = state.config.exchanges.filter(arr => arr.name === action.exchange)[0];
+        let _channel = null;
+        return channel()
+        .then((Channel) => {
+            _channel = Channel;
+            return _channel.assertExchange(exchange.key, exchange.type);
+        })
+        .then((a) => {
+            return _channel.publish(a.exchange, action.routingKey, _.contentToBuffer(content));
+        });
+    }
+
+    /**
      * Wait for the queue to be created
      * @param q {String} Queue key
      * @param action {String} Queue action
