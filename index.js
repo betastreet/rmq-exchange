@@ -38,6 +38,7 @@ class RMQ {
     constructor() {
         this.initialize();
         this.consumers = [];
+        this.consumersSubscribe = [];
     }
 
     initialize() {
@@ -80,6 +81,11 @@ class RMQ {
                     this.consumeFromWaitQueue(consumer.q, consumer.action, consumer.callback);
                 });
             }
+            if (this.consumersSubscribe && this.consumersSubscribe.length) {
+                this.consumersSubscribe.forEach((consumer) => {
+                    this.consumeFromSubscribe(consumer.q, consumer.callback);
+                });
+            }
         }).catch((err) => { throw err; });
     }
 
@@ -107,6 +113,7 @@ class RMQ {
      * Publish message to exchange
      * @param content {String} Message body
      * @param actionName {String} action from the actionsPublish section of the rabbit-config.js
+     * rabbit-config.js sample
      * actionsPublish: {
      *     update: {
      *         exchange: 'Direct',
@@ -201,6 +208,53 @@ class RMQ {
         });
     }
 
+    /**
+     * Consume from a queue
+     * @param queueConfigName {String} from rabbit configuration file
+     * @param callback function(msg, channel) {}
+     * rabbit-config.js sample
+     * queuesSubscribe: [{
+     *   name: 'CampaignQuery',
+     *   key: ($) ? 'campaignQuery' : 'testCampaignQuery',
+     *   sources: [{
+     *     exchange: { name: 'amq.direct', type: 'direct' },
+     *     routingKeys: ['advertiser.create', 'advertiser.update', 'advertiser.delete'],
+     *   }],
+     * }],
+     *
+     * Usage:
+     * rabbit.consumeFromSubscribe('CampaignQuery', (msg, channel) => {
+     *   console.log(`received message from ${msg.fields.routingKey} with content ${msg.content.toString()}`);
+     *   switch (msg.fields.routingKey) {
+     *     case 'advertiser.create':
+     *       patchResource('advertiser', msg, channel);
+     *       break;
+     *     case 'advertiser.update':
+     *       patchResource('advertiser', msg, channel);
+     *       break;
+     *     case 'advertiser.delete':
+     *       destroyResource('advertiser', msg, channel);
+     *       break;
+     *     default:
+     *       break;
+     *   }
+     * });
+     */
+    consumeFromSubscribe(queueConfigName, callback) {
+        this.consumersSubscribe.push({ q: queueConfigName, callback });
+        const queue = state.config.queuesSubscribe.filter(arr => arr.name === queueConfigName)[0];
+        let _channel = null;
+        _.channel()
+        .then((Channel) => {
+            _channel = Channel;
+            return _channel.assertQueue(queue.key);
+        })
+        .then((r) => {
+            _channel.consume(`${r.queue}`, (msg) => {
+                callback(msg, _channel);
+            });
+        });
+    }
 
     queue(q, action, content, options) {
         const queue = state.config.queues.filter(arr => arr.name = q)[0];
@@ -241,6 +295,7 @@ function generateConfiguration(host, port) {
             exchanges: [],
             policies: [],
             upstreams: [],
+            queuesSubscribe: [],
         };
 
         state.config.url = `${state.config.protocol}${state.config.user}:${state.config.pass}@${state.config.host}`;
@@ -412,7 +467,24 @@ function bindQueues() {
             });
 
             return acc;
-        }, [Channel])))
+        }, [Channel]).concat(state.config.queuesSubscribe.reduce((acc, q) => {
+            q.sources.forEach(source => {
+                source.routingKeys.forEach(routingKey => {
+                    acc.push(
+                        Channel.assertExchange(source.exchange.name, source.exchange.type)
+                            .then((r /* { exchange: '${q.exchange.name}' } */) => {
+                                return Channel.assertQueue(q.key);
+                            })
+                            .then((r /* { queue: '${q.key}' } */) => {
+                                return Channel.bindQueue(r.queue, source.exchange.name, routingKey);
+                            })
+                    );
+                });
+            });
+
+            return acc;
+        }, []))
+        ))
         .catch(err => { throw err; });
 }
 
