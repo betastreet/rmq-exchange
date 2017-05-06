@@ -202,6 +202,7 @@ class RMQ {
         return new Promise((resolve, reject) => {
             _.channel()
                 .then(channel => {
+                    if (state.config.maxConcurrentJobs) channel.prefetch(state.config.maxConcurrentJobs);
                     channel.consume(`${queue.key}.${action}`, (msg) => callback(msg, channel));
                 })
                 .catch(err => reject(err));
@@ -250,6 +251,7 @@ class RMQ {
             return _channel.assertQueue(queue.key);
         })
         .then((r) => {
+            if (state.config.maxConcurrentJobs) _channel.prefetch(state.config.maxConcurrentJobs);
             _channel.consume(`${r.queue}`, (msg) => {
                 callback(msg, _channel);
             });
@@ -291,6 +293,7 @@ function generateConfiguration(host, port) {
             host: host,
             port: port,
             adminPort: process.env.RABBITMQ_ADMIN_PORT || 15672,
+            maxConcurrentJobs: null,
             queues: [],
             exchanges: [],
             policies: [],
@@ -500,6 +503,7 @@ function createConsumers() {
                     const queue = q.actions[action];
 
                     if (queue.consume && _.findExchange(queue.source)) {
+                        if (state.config.maxConcurrentJobs) Channel.prefetch(state.config.maxConcurrentJobs);
                         Channel.consume(`${q.key}.${action}`, (msg) => queue.consume(msg, Channel));
                     }
                 });
