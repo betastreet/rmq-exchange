@@ -153,6 +153,9 @@ class RMQ {
         })
         .then((a) => {
             return _channel.publish(a.exchange, action.routingKey, _.contentToBuffer(content));
+        })
+        .catch(() => {
+            _.close();
         });
     }
 
@@ -355,9 +358,11 @@ function channel() {
 
     state.channel = connection().then(con => {
 
-            return con.createChannel();
-        })
-        .catch(err => { throw err; });
+        return con.createChannel();
+    })
+        .catch(err => {
+            _.close();
+        });
     return state.channel;
 }
 
